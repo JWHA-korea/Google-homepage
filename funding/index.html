@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Funding</title>
+<style>
+  :root{ --brand:#3AAE85; --ink:#0d0d0d; --muted:#666; }
+
+  /* Layout */
+  body{ margin:0; font-family:system-ui, Arial, "Noto Sans KR"; background:#fff; color:var(--ink); }
+  .wrap{ max-width:1200px; margin:0 auto; padding:0 8px; }
+
+  /* 상단 제목은 요청대로 제거(존재 자체를 만들지 않음) */
+
+  /* Section titles */
+  .funding-modern{ padding:10px; }
+  .fund-section-title{
+    font-size:18px; font-weight:800; color:#2f7d5f; margin:14px 0 10px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .fund-section-title .count{
+    font-size:12px; font-weight:700; color:#fff; background:var(--brand);
+    border-radius:999px; padding:2px 8px;
+  }
+
+  /* Cards */
+  .fund-list{ margin:0; padding:0; list-style:none; }
+  .fund-card{
+    background:rgba(255,255,255,.92);
+    border-left:4px solid #a4d4ae; border-radius:14px;
+    padding:14px 18px; margin:0 0 12px;
+    box-shadow:0 6px 18px rgba(0,0,0,.05);
+    transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+  }
+  .fund-card:hover{
+    transform:translateY(-3px);
+    box-shadow:0 12px 28px rgba(0,0,0,.08);
+    border-left-color:#2f6df4;
+  }
+  .fund-title{ font-size:16px; font-weight:600; margin:0 0 4px; line-height:1.42; }
+  .fund-info{ font-size:14px; color:var(--muted); }
+
+  /* === Past 토글: Modern Pill 스타일 === */
+  details.fold{
+    background:linear-gradient(180deg,#f9fdfb,#f4fbf7);
+    border:1px solid #e3efe8; border-radius:14px; overflow:hidden;
+    padding:0; box-shadow:0 4px 14px rgba(0,0,0,.04);
+  }
+  details.fold > summary{
+    cursor:pointer; list-style:none; display:flex; align-items:center; gap:10px;
+    padding:12px 14px; outline:none; user-select:none;
+  }
+  details.fold > summary::-webkit-details-marker{ display:none; }
+
+  .fold .icon{
+    width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center;
+    border:1px solid #cfe3d8; border-radius:50%; background:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.05); transition:.25s;
+  }
+  .fold .chev{ transition:transform .25s ease; }
+  details.fold[open] .chev{ transform:rotate(180deg); } /* ▼ → ▲ */
+
+  .fold .label{ font-weight:800; color:#2f7d5f; letter-spacing:.2px; }
+  .fold .count{
+    margin-left:auto; font-size:12px; font-weight:700; color:#2c7b5f;
+    background:#d5efe4; border-radius:999px; padding:2px 8px;
+  }
+
+  /* 펼쳐진 본문 */
+  .fold .body{ border-top:1px dashed #e2eee7; padding:10px 14px 12px; }
+
+  /* Empty state */
+  .empty{ color:#889; padding:16px 6px; }
+
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- 상단 Funding 제목은 제거됨 -->
+
+    <section class="funding-modern">
+      <div class="fund-now">
+        <div class="fund-section-title">Now <span class="count" id="cntNow">0</span></div>
+        <ul class="fund-list" id="fundNow"></ul>
+      </div>
+
+      <!-- Modern Past Toggle -->
+      <details class="fold" id="wrapPast">
+        <summary>
+          <span class="icon" aria-hidden="true">
+            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="#2f7d5f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </span>
+          <span class="label">Past</span>
+          <span class="count" id="cntPast">0</span>
+        </summary>
+        <div class="body">
+          <ul class="fund-list" id="fundPast" style="margin-top:0;"></ul>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <script>
+    // Apps Script에서 주입된 자기 자신의 웹앱 URL
+    const API_BASE = '<?= apiBase ?>';
+    const API = API_BASE + '?mode=json';
+
+    const nowEl  = document.getElementById('fundNow');
+    const pastEl = document.getElementById('fundPast');
+    const cntNow = document.getElementById('cntNow');
+    const cntPast= document.getElementById('cntPast');
+    const wrapPast = document.getElementById('wrapPast');
+
+    function escapeHTML(s){
+      return String(s ?? '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    function cardHTML(d){
+      return `
+        <li class="fund-card">
+          <div class="fund-title">${escapeHTML(d.title)}</div>
+          <div class="fund-info">${escapeHTML(d.period)}</div>
+        </li>`;
+    }
+
+    fetch(API).then(r=>r.json()).then(({now=[], past=[]})=>{
+      nowEl.innerHTML  = now.length  ? now.map(cardHTML).join('')  : '<div class="empty">진행 중 과제가 없습니다.</div>';
+      pastEl.innerHTML = past.length ? past.map(cardHTML).join('') : '<div class="empty">과거 과제가 없습니다.</div>';
+      cntNow.textContent  = now.length;
+      cntPast.textContent = past.length;
+      if (past.length === 0) wrapPast.style.display='none';
+    }).catch(err=>{
+      nowEl.innerHTML = `
+        <li class="fund-card">
+          <div class="fund-title">로드 실패</div>
+          <div class="fund-info">권한/URL을 확인하세요.</div>
+        </li>`;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
