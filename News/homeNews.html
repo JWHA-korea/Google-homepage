@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab News Slider</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --w: 860px; --ratio: 16/3.2; --radius: 14px;
+    --border: 1px solid rgba(0,0,0,.08); --shadow: 0 8px 24px rgba(0,0,0,.06);
+    --accent: #1f6f4f; --text:#111; --muted:#6b7280;
+  }
+
+  html, body { margin:0; padding:0; background:#fff; overflow:hidden;
+    font-family:"Inter", system-ui, -apple-system, "Noto Sans KR", Segoe UI, Roboto, sans-serif; }
+
+  .slider { width:100%; max-width:var(--w); margin:0 auto; }
+
+  .stage { position: relative; width:100%; aspect-ratio: var(--ratio);
+    background:#f7f7f8; border:var(--border); border-radius:var(--radius);
+    overflow:hidden; box-shadow:var(--shadow); height: 380px; min-height: 380px; }
+
+  .slide { position:absolute; inset:0; opacity:0; transition:opacity .5s ease; }
+  .slide.active { opacity:1; }
+
+  .figure img { width:100%; height:100%; object-fit:cover; }
+
+  /* ◀▶ 글자만 보이는 네비 (박스 없음) */
+  .nav { position:absolute; inset:0; display:flex; justify-content:space-between; align-items:center; pointer-events:none; }
+  .btn {
+    pointer-events:auto;
+    background:transparent !important;
+    border:none !important;
+    box-shadow:none !important;
+    font-size:32px;
+    font-weight:700;
+    color:white;
+    opacity:0.9;
+    cursor:pointer;
+    padding:0 12px;
+    user-select:none;
+    z-index:3;
+    text-shadow:0 2px 8px rgba(0,0,0,.35);
+  }
+  .btn:hover { opacity:1; }
+
+  .progress { position:absolute; left:0; right:0; bottom:0; height:3px; background: rgba(0,0,0,.06); z-index:2; }
+  .bar { width:0%; height:100%; background: var(--accent); }
+
+  .caption-bar{ margin-top:10px; padding:10px;
+    border:var(--border); border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.04); }
+
+  .cap-link{ font-weight:700; font-size:15px; text-decoration:none; color:var(--text); }
+
+  .dots { display:flex; gap:6px; justify-content:center; margin:10px 0; }
+  .dot { width:7px; height:7px; border-radius:50%; background:#d1d5db; cursor:pointer; }
+  .dot.active { width:20px; background:var(--accent); }
+
+  #msg{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+</style>
+</head>
+<body>
+
+<div class="slider">
+  <div class="stage" id="stage">
+    <div id="msg">Loading…</div>
+    <div class="nav">
+      <button class="btn" id="prev">‹</button>
+      <button class="btn" id="next">›</button>
+    </div>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+  </div>
+
+  <div class="caption-bar">
+    <a class="cap-link" id="capTitle" href="#" rel="noopener"> </a>
+  </div>
+
+  <div class="dots" id="dots"></div>
+</div>
+
+<script>
+  const NEWS_LIST_URL = "https://sites.google.com/view/gbdlab/news";
+  const LIST_API = "<?= baseUrl ?>?view=api";  // Code.gs에서 이미 최신 5개만 리턴
+  const INTERVAL_MS = 3000;
+
+  let data=[], cur=0, timer=null, raf=null;
+  const stage = document.getElementById('stage');
+  const dots  = document.getElementById('dots');
+  const bar   = document.getElementById('bar');
+  const capTitle = document.getElementById('capTitle');
+
+  function setTarget(a){ a.target='_top'; a.rel='noopener'; }
+
+  fetch(LIST_API)
+    .then(r => r.json())
+    .then(json => {
+      data = json;
+      render(); go(0); start();
+      document.getElementById('msg')?.remove();
+    });
+
+  function render(){
+    stage.querySelectorAll('.slide').forEach(n=>n.remove());
+    dots.innerHTML = '';
+
+    data.forEach((n,i)=>{
+      const slide = document.createElement('a');
+      slide.className='slide';
+      slide.href = NEWS_LIST_URL;      // 뉴스 리스트로 이동
+      setTarget(slide);
+      slide.innerHTML = `<div class="figure"><img src="${n.imageurl.split(/[,;|]/)[0].trim()}"></div>`;
+      stage.appendChild(slide);
+
+      const dot=document.createElement('div');
+      dot.className='dot';
+      dot.onclick=()=>{go(i); restart();}
+      dots.appendChild(dot);
+    });
+
+    prev.onclick = ()=>{prevSlide(); restart();}
+    next.onclick = ()=>{nextSlide(); restart();}
+  }
+
+  function updateCaption(i){
+    capTitle.textContent = data[i].title;
+    capTitle.href = NEWS_LIST_URL;
+    setTarget(capTitle);
+  }
+
+  function go(i){
+    cur=i;
+    document.querySelectorAll('.slide').forEach((el,idx)=>el.classList.toggle('active',idx===i));
+    document.querySelectorAll('.dot').forEach((el,idx)=>el.classList.toggle('active',idx===i));
+    updateCaption(i);
+    progress();
+  }
+
+  function nextSlide(){ go((cur+1)%data.length) }
+  function prevSlide(){ go((cur-1+data.length)%data.length) }
+
+  function start(){ stop(); timer=setInterval(nextSlide, INTERVAL_MS); progress(); }
+  function stop(){ clearInterval(timer); timer=null; cancelAnimationFrame(raf); }
+  function restart(){ stop(); start(); }
+
+  function progress(){
+    cancelAnimationFrame(raf);
+    const t0 = performance.now(); bar.style.width='0%';
+    const step=(t)=>{
+      const r = Math.min((t-t0)/INTERVAL_MS,1);
+      bar.style.width=(r*100)+'%';
+      if(r<1 && timer) raf=requestAnimationFrame(step);
+    }
+    raf=requestAnimationFrame(step);
+  }
+</script>
+</body>
+</html>
