@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Alumni</title>
+<style>
+  :root{
+    --ink:#0d0d0d; --muted:#6b7280; --brand:#006c4f;
+    --line:#e7ece9; --card:#ffffff;
+    --shadow:0 6px 18px rgba(0,0,0,.06);
+  }
+  html,body{
+    margin:0;padding:0;color:var(--ink);
+    font-family:system-ui,Arial,"Noto Sans KR";
+  }
+  .wrap{
+    max-width:1100px;
+    margin:0 auto;
+    padding:14px;
+  }
+
+  /* ✅ 2열 그리드: 카드들을 두 칸씩 배치 */
+  .list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:16px;              /* 카드 사이 간격 */
+  }
+
+  .card{
+    flex:0 0 calc(50% - 8px);   /* 2열(50%) - 간격 보정 */
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px 18px;
+    box-shadow:var(--shadow);
+    box-sizing:border-box;
+  }
+
+  /* 모바일에서는 한 줄에 하나만 */
+  @media (max-width: 720px){
+    .card{
+      flex:1 1 100%;
+    }
+  }
+
+  .name{
+    margin:0 0 6px;
+    font-size:18px;
+    font-weight:800;
+  }
+  .desc{
+    color:#333;
+    font-size:14.5px;
+  }
+  .sub{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    margin-top:10px;
+    flex-wrap:wrap;
+  }
+
+  .chip{
+    border:1px solid #e0e7e4;
+    background:#f3f8f6;
+    color:#2a5f4f;
+    font-size:12px;
+    border-radius:999px;
+    padding:4px 10px;
+  }
+  .muted{
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  /* ✅ Pager */
+  .pager{
+    display:flex;
+    justify-content:center;
+    gap:8px;
+    margin:18px 0 0;
+  }
+  .pager a, .pager span{
+    border:1px solid #e3e3e3;
+    background:#fff;
+    color:#222;
+    min-width:28px;
+    height:28px;
+    border-radius:6px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 8px;
+    font-size:14px;
+    font-weight:600;
+    text-decoration:none;
+  }
+  .pager .active{
+    background:var(--brand);
+    color:#fff;
+    border-color:var(--brand);
+  }
+  .pager .disabled{
+    opacity:.4;
+    pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="list">
+    <? if (!model.items.length) { ?>
+      <article class="card">
+        <p class="muted" style="margin:0">No alumni yet.</p>
+      </article>
+    <? } else { ?>
+      <? for (var a of model.items) { ?>
+        <article class="card">
+          <h4 class="name"><?= a.name ?></h4>
+          <? if (a.topic || a.interest) { ?>
+            <div class="desc">
+              <?= a.topic ? a.topic : a.interest ?>
+            </div>
+          <? } ?>
+          <div class="sub">
+            <? if (a.degree) { ?><span class="chip"><?= a.degree ?></span><? } ?>
+            <? if (a.year)   { ?><span class="muted"><?= a.year ?></span><? } ?>
+            <? if (a.next)   { ?><span class="muted">· <?= a.next ?></span><? } ?>
+          </div>
+        </article>
+      <? } ?>
+    <? } ?>
+  </div>
+
+  <!-- Pager -->
+  <nav class="pager" aria-label="pagination">
+    <? var base = ScriptApp.getService().getUrl(); ?>
+    <? var prevUrl = base + '?page=' + Math.max(1, model.page-1); ?>
+    <? var nextUrl = base + '?page=' + Math.min(model.pages, model.page+1); ?>
+
+    <a class="<?= model.hasPrev ? '' : 'disabled' ?>" href="<?= prevUrl ?>">‹</a>
+    <span class="active"><?= model.page ?></span>
+    <? if (model.page < model.pages) { ?>
+      <a href="<?= base + '?page=' + (model.page+1) ?>"><?= model.page+1 ?></a>
+    <? } ?>
+    <a class="<?= model.hasNext ? '' : 'disabled' ?>" href="<?= nextUrl ?>">›</a>
+  </nav>
+</div>
+</body>
+</html>
