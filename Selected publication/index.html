@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Publications</title>
+
+<style>
+  :root{
+    --text:#111;
+    --muted:#666;
+    --border:#e3e3e3;
+    --brand:#006c4f;
+  }
+  html,body{
+    margin:0;padding:0;
+    color:var(--text);
+    font-family:system-ui, Arial, "Noto Sans KR";
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:24px;}
+
+  /* Google Sites 기본 제목 숨기기 */
+  h1{display:none;}
+
+  /* ====== 필터 영역 ====== */
+  .filters{
+    margin-bottom:16px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .filter-group{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .filter-label{
+    font-size:13px;
+    font-weight:700;
+    color:var(--muted);
+    margin-right:4px;
+  }
+  .chip{
+    border:1px solid var(--border);
+    background:#f8f8f8;
+    color:#444;
+    padding:3px 10px;
+    border-radius:999px;
+    font-size:12px;
+    cursor:pointer;
+  }
+  .chip:hover{
+    background:#eee;
+  }
+  .chip.active{
+    background:var(--brand);
+    color:#fff;
+    border-color:var(--brand);
+  }
+
+  .result{border-top:1px solid var(--border);}
+  .pub{padding:16px 0;border-bottom:1px dashed var(--border);}
+  .title{margin:0 0 6px;}
+  .title a{
+    color:#222;
+    text-decoration:none;
+    font-weight:800;
+    font-size:20px;
+    line-height:1.35;
+  }
+  .title a:hover{ text-decoration:underline; }
+
+  .meta{
+    color:var(--muted);
+    font-size:14px;
+    line-height:1.45;
+    margin:8px 0 4px;
+  }
+  .journal{color:#777;}
+
+  /* 저자 중 연구실 사람: 색은 그대로, 굵게만 */
+  .meta .lab-author{
+    font-weight:700;
+    color:inherit;
+  }
+
+  .tags{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;}
+  .tag{
+    font-size:12px;
+    background:#f3f3f3;
+    color:#555;
+    border-radius:999px;
+    padding:3px 10px;
+  }
+
+  .empty{padding:36px 0;text-align:center;color:#777;}
+
+  .pager{
+    display:flex;
+    justify-content:center;
+    gap:8px;
+    margin:18px 0 0;
+  }
+  .pager button{
+    border:1px solid var(--border);
+    background:#fff;
+    color:#222;
+    padding:6px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:16px;
+    font-weight:600;
+  }
+  .pager button.active{
+    background:var(--brand);
+    color:#fff;
+    border-color:var(--brand);
+  }
+  .pager button:disabled{
+    opacity:.4;
+    cursor:not-allowed;
+  }
+</style>
+</head>
+
+<body>
+  <div class="wrap">
+    <!-- 필터 영역 -->
+    <div id="filters" class="filters"></div>
+
+    <div id="list" class="result">Loading…</div>
+    <div id="pager" class="pager"></div>
+  </div>
+
+<script>
+const RAW  = JSON.parse('<?= itemsJson ?>') || [];
+const PAGE_SIZE = Number('<?= pageSize ?>') || 10;
+
+// ===== 데이터 전처리 (연도 태그, 일반 태그 배열) =====
+const DATA = RAW.map(p => {
+  const yearStr = String(p.year || '').trim();
+  const yearTag = yearStr ? yearStr.split('.')[0] : ''; // "2025.10" → "2025"
+
+  const tagList = String(p.tags || '')
+    .split(',')
+    .map(t => t.trim())
+    .filter(t => t.length > 0);
+
+  return Object.assign({}, p, { yearTag, tagList });
+});
+
+// 유니크한 연도/태그 목록 만들기
+const yearSet = new Set();
+const tagSet  = new Set();
+DATA.forEach(p => {
+  if (p.yearTag) yearSet.add(p.yearTag);
+  p.tagList.forEach(t => tagSet.add(t));
+});
+const YEAR_FILTERS = Array.from(yearSet).sort((a,b)=>b.localeCompare(a)); // 최신 연도 먼저
+const TAG_FILTERS  = Array.from(tagSet).sort((a,b)=>a.localeCompare(b));
+
+let state = {
+  page:1,
+  yearFilter:null,
+  tagFilter:null,
+};
+
+function escapeHTML(s){ 
+  return String(s).replace(/[&<>"']/g, m=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+
+// ===== 필터 UI 렌더링 =====
+function renderFilters(){
+  const box = document.getElementById('filters');
+
+  const yearChips = ['All', ...YEAR_FILTERS].map(y => {
+    const val = (y === 'All') ? null : y;
+    const active = state.yearFilter === val;
+    return `<button class="chip ${active ? 'active' : ''}" data-type="year" data-val="${val ?? ''}">
+              ${y}
+            </button>`;
+  }).join('');
+
+  const tagChips = ['All', ...TAG_FILTERS].map(t => {
+    const val = (t === 'All') ? null : t;
+    const active = state.tagFilter === val;
+    return `<button class="chip ${active ? 'active' : ''}" data-type="tag" data-val="${val ?? ''}">
+              ${t}
+            </button>`;
+  }).join('');
+
+  box.innerHTML = `
+    <div class="filter-group">
+      ${yearChips}
+    </div>
+    <div class="filter-group">
+      ${tagChips}
+    </div>
+  `;
+
+  // 클릭 이벤트 위임
+  box.onclick = (e)=>{
+    const btn = e.target.closest('.chip');
+    if (!btn) return;
+    const type = btn.dataset.type;
+    const val  = btn.dataset.val || null; // '' → null
+
+    if (type === 'year') state.yearFilter = val;
+    if (type === 'tag')  state.tagFilter  = val;
+
+    state.page = 1; // 필터 바꾸면 첫 페이지로
+    render();
+  };
+}
+
+// ===== 메인 리스트 렌더링 =====
+function render(){
+  const list = document.getElementById('list');
+
+  // 필터 적용
+  const filtered = DATA.filter(p => {
+    if (state.yearFilter && p.yearTag !== state.yearFilter) return false;
+    if (state.tagFilter && !p.tagList.includes(state.tagFilter)) return false;
+    return true;
+  });
+
+  if (!filtered.length){
+    list.innerHTML = `<div class="empty">No publications for this filter.</div>`;
+    document.getElementById('pager').innerHTML = '';
+    renderFilters(); // active 상태 갱신
+    return;
+  }
+
+  const start = (state.page-1)*PAGE_SIZE;
+  const rows = filtered.slice(start, start+PAGE_SIZE);
+
+  list.innerHTML = rows.map(p => {
+    const titleHtml   = p.titleHtml   || escapeHTML(p.title || '');
+    const authorsHtml = p.authorsHtml || escapeHTML(p.authors || '');
+    const yearText    = escapeHTML(String(p.year || ''));
+
+    const tagsHtml = (p.tagList && p.tagList.length)
+      ? p.tagList.map(t=>`<span class="tag">${escapeHTML(t)}</span>`).join('')
+      : '';
+
+    return `
+    <div class="pub">
+      <h3 class="title">
+        ${p.link 
+          ? `<a href="${p.link}" target="_blank" rel="noopener">${titleHtml}</a>` 
+          : titleHtml}
+      </h3>
+      <div class="meta">
+        <span class="authors">${authorsHtml}</span> | ${yearText} |
+        <span class="journal">${escapeHTML(p.journal || '')}</span>
+      </div>
+      ${tagsHtml ? `<div class="tags">${tagsHtml}</div>` : ``}
+    </div>`;
+  }).join('');
+
+  renderPager(filtered.length);
+  renderFilters(); // chip active 상태 다시 그림
+}
+
+// ===== 페이지네이션 =====
+function renderPager(total){
+  const pages = Math.max(1, Math.ceil(total/PAGE_SIZE));
+  const pager = document.getElementById('pager');
+
+  const buttons = [];
+  buttons.push(makeBtn('‹', Math.max(1, state.page-1), state.page===1));
+
+  const span = 2;
+  const s = Math.max(1, state.page-span);
+  const e = Math.min(pages, state.page+span);
+  for(let i=s;i<=e;i++){
+    buttons.push(makeBtn(String(i), i, false, false, i===state.page));
+  }
+
+  buttons.push(makeBtn('›', Math.min(pages, state.page+1), state.page===pages));
+
+  pager.innerHTML = '';
+  buttons.forEach(b => pager.appendChild(b));
+}
+
+function makeBtn(label, page, disabled, nothing, active){
+  const b = document.createElement('button');
+  b.textContent = label;
+  if (active) b.classList.add('active');
+  if (disabled) b.disabled = true;
+  b.onclick = ()=>{
+    state.page = page;
+    render();
+    window.scrollTo({top:0, behavior:'smooth'});
+  };
+  return b;
+}
+
+// 초기 렌더
+render();
+</script>
+</body>
+</html>
