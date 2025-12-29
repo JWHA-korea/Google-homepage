@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <base target="_top">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --text:#111; --muted:#666; --border:#e3e3e3; --brand:#006c4f;
+      --card-bg:#fff; --card-shadow:0 6px 18px rgba(0,0,0,.06);
+    }
+    html,body{
+      margin:0;padding:0;background:#fff;color:var(--text);
+      font-family:"Inter",system-ui,-apple-system,"Noto Sans KR",Arial,sans-serif;
+    }
+    .wrap{max-width:1080px;margin:0 auto 40px;padding:12px 16px 56px;}
+
+    /* ==== 연도 필터 칩 ==== */
+    .year-filter{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      margin:4px 0 12px;
+    }
+    .year-chip{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:4px 12px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:#f3f3f3;
+      color:#555;
+      font-size:12px;
+      text-decoration:none;
+      cursor:pointer;
+    }
+    .year-chip:hover{
+      background:#e5e7eb;
+    }
+    .year-chip.active{
+      background:var(--brand);
+      color:#fff;
+      border-color:var(--brand);
+    }
+
+    .list{display:flex;flex-direction:column;gap:14px;}
+
+    .card{
+      display:grid; grid-template-columns: 320px 1fr; gap:24px;
+      padding:18px; border:1px solid #eee; border-radius:16px;
+      background:var(--card-bg); box-shadow:var(--card-shadow);
+    }
+    @media (max-width:720px){ .card{ grid-template-columns:1fr; } }
+
+    /* ▶ 썸네일 슬라이더 */
+    .stage{ position:relative; width:100%; aspect-ratio:16/10; border-radius:12px; overflow:hidden; background:#f4f4f4; }
+    .slide{ position:absolute; inset:0; opacity:0; transition:opacity .35s ease; }
+    .slide.active{ opacity:1; }
+    .slide img{ width:100%; height:100%; object-fit:cover; }
+
+    .nav{ position:absolute; inset:0; display:flex; justify-content:space-between; align-items:center; pointer-events:none; }
+    .nav button{
+      pointer-events:auto; background:transparent; border:none; box-shadow:none;
+      font-size:28px; font-weight:800; color:#fff; opacity:.9; cursor:pointer; padding:0 10px;
+      text-shadow:0 2px 8px rgba(0,0,0,.35);
+    }
+    .nav button:hover{ opacity:1; }
+
+    .dots{ position:absolute; left:0; right:0; bottom:8px; display:flex; gap:6px; justify-content:center; }
+    .dot{ width:7px; height:7px; border-radius:50%; background:#d1d5db; }
+    .dot.active{ width:18px; background:var(--brand); border-radius:999px; }
+
+    /* 텍스트 */
+    .title{font-size:22px; font-weight:800; margin:0 0 8px; line-height:1.3}
+    .meta{color:var(--muted); font-size:14px; margin:4px 0 10px}
+    .summary{color:#333; font-size:15px}
+    .chips{margin-top:10px}
+    .chip{display:inline-block; background:#f3f3f3; border-radius:999px; padding:4px 10px; font-size:12px; margin-right:6px; color:#555}
+
+    /* ▸ 페이지 네비(〈 1 〉) */
+    .pager{
+      display:flex; justify-content:center; align-items:center; gap:12px; margin:22px 0 0;
+    }
+    .pager .btn{
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:14px; height:28px; padding:0 14px;
+      border-radius:12px; border:1px solid var(--border);
+      background:#fff; color:#6b7280; text-decoration:none; font-weight:700;
+      box-shadow:0 6px 16px rgba(0,0,0,.06);
+      transition:transform .08s ease, box-shadow .12s ease, background .12s ease, color .12s ease, border-color .12s ease;
+      line-height:1;
+      cursor:pointer;
+    }
+    .pager .btn.active{
+      background:var(--brand); color:#fff; border-color:var(--brand);
+    }
+    .pager .btn[disabled]{
+      opacity:.4; pointer-events:none; cursor:not-allowed;
+      background:#fff; color:#9ca3af; border-color:var(--border);
+      box-shadow:0 4px 12px rgba(0,0,0,.04);
+    }
+
+    .empty{padding:36px 0;text-align:center;color:#777;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- 연도 칩 -->
+    <div id="yearFilter" class="year-filter"></div>
+
+    <!-- 리스트 / 페이지 -->
+    <div id="newsList" class="list">Loading…</div>
+    <div id="pager" class="pager"></div>
+  </div>
+
+<script>
+  const RAW  = JSON.parse('<?= itemsJson ?>') || [];
+  const PAGE_SIZE = Number('<?= pageSize ?>') || 5;
+
+  // ===== 데이터 전처리 =====
+  const DATA = RAW.map(n => {
+    const yearTag = String(n.yearTag || '').trim() || (n.dateStr || '').substring(0,4);
+
+    const images = String(n.imageurl || '')
+      .split(/[,;|]/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+
+    const tagList = String(n.tags || '')
+      .split(',')
+      .map(t => t.trim())
+      .filter(t => t.length > 0);
+
+    return Object.assign({}, n, { yearTag, images, tagList });
+  });
+
+  // 연도 목록
+  const yearSet = new Set();
+  DATA.forEach(n => { if (n.yearTag) yearSet.add(n.yearTag); });
+  const YEAR_FILTERS = Array.from(yearSet).sort((a,b)=>b.localeCompare(a)); // 최신 먼저
+
+  let state = {
+    page: 1,
+    yearFilter: null
+  };
+
+  function escapeHTML(s){
+    return String(s).replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  // ===== 연도 칩 =====
+  function renderYearChips(){
+    const box = document.getElementById('yearFilter');
+    const chips = ['All', ...YEAR_FILTERS].map(y => {
+      const val = (y === 'All') ? null : y;
+      const active = state.yearFilter === val;
+      return `<button class="year-chip ${active ? 'active' : ''}" data-val="${val ?? ''}">${y}</button>`;
+    }).join('');
+    box.innerHTML = chips;
+
+    box.onclick = (e)=>{
+      const btn = e.target.closest('.year-chip');
+      if (!btn) return;
+      const val = btn.dataset.val || null;
+      state.yearFilter = val;
+      state.page = 1;
+      render();
+    };
+  }
+
+  // ===== 메인 리스트 =====
+  function render(){
+    const listEl = document.getElementById('newsList');
+
+    const filtered = DATA.filter(n => {
+      if (state.yearFilter && n.yearTag !== state.yearFilter) return false;
+      return true;
+    });
+
+    if (!filtered.length){
+      listEl.innerHTML = `<div class="empty">No news for this filter.</div>`;
+      document.getElementById('pager').innerHTML = '';
+      renderYearChips();
+      return;
+    }
+
+    const start = (state.page-1) * PAGE_SIZE;
+    const rows  = filtered.slice(start, start + PAGE_SIZE);
+
+    listEl.innerHTML = rows.map(n => {
+      const imgs = n.images.length ? n.images : [''];
+      const slides = imgs.map((url,idx)=>
+        `<div class="slide${idx===0 ? ' active':''}"><img src="${escapeHTML(url)}"></div>`
+      ).join('');
+
+      const navDots = (imgs.length > 1)
+        ? `
+          <div class="nav">
+            <button class="prev" aria-label="prev">‹</button>
+            <button class="next" aria-label="next">›</button>
+          </div>
+          <div class="dots">
+            ${imgs.map((_,idx)=>`<div class="dot${idx===0 ? ' active':''}"></div>`).join('')}
+          </div>`
+        : '';
+
+      const tagsHtml = n.tagList.length
+        ? `<div class="chips">${n.tagList.map(t=>`<span class="chip">${escapeHTML(t)}</span>`).join('')}</div>`
+        : '';
+
+      return `
+        <div class="card">
+          <div>
+            <div class="stage" data-count="${imgs.length}">
+              ${slides}
+              ${navDots}
+            </div>
+          </div>
+          <div>
+            <h2 class="title">${escapeHTML(n.title || '')}</h2>
+            <div class="meta">${escapeHTML(n.dateStr || '')}</div>
+            ${n.summary ? `<div class="summary">${escapeHTML(n.summary)}</div>` : ''}
+            ${tagsHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    renderPager(filtered.length);
+    renderYearChips();
+    initSliders();
+  }
+
+  // ===== 페이지네이션 =====
+  function renderPager(total){
+    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const pager = document.getElementById('pager');
+
+    const btn = (label, page, disabled, active=false) => {
+      return `<button class="btn${active ? ' active':''}" data-page="${page}" ${disabled?'disabled':''}>${label}</button>`;
+    };
+
+    const parts = [];
+
+    if (pages === 1) {
+      parts.push(btn('‹', 1, true));
+      parts.push(btn('1', 1, false, true));
+      parts.push(btn('›', 1, true));
+    } else {
+      parts.push(btn('‹', Math.max(1, state.page-1), state.page===1));
+
+      const span = 2;
+      const s = Math.max(1, state.page-span);
+      const e = Math.min(pages, state.page+span);
+      for (let i=s;i<=e;i++){
+        parts.push(btn(String(i), i, false, i===state.page));
+      }
+
+      parts.push(btn('›', Math.min(pages, state.page+1), state.page===pages));
+    }
+
+    pager.innerHTML = parts.join('');
+
+    pager.onclick = (e)=>{
+      const b = e.target.closest('.btn');
+      if (!b || b.disabled) return;
+      const p = Number(b.dataset.page || state.page);
+      state.page = p;
+      render();
+      window.scrollTo({top:0, behavior:'smooth'});
+    };
+  }
+
+  // ===== 카드별 슬라이더 =====
+  function initSliders(){
+    document.querySelectorAll('.stage').forEach(stage=>{
+      const slides = stage.querySelectorAll('.slide');
+      if (!slides.length) return;
+
+      let i = 0;
+      const prev = stage.querySelector('.prev');
+      const next = stage.querySelector('.next');
+      const dots = stage.querySelectorAll('.dot');
+
+      function go(n){
+        i = (n + slides.length) % slides.length;
+        slides.forEach((s,idx)=> s.classList.toggle('active', idx===i));
+        dots.forEach((d,idx)=> d.classList.toggle('active', idx===i));
+      }
+      prev && (prev.onclick = ()=> go(i-1));
+      next && (next.onclick = ()=> go(i+1));
+      dots.forEach((d,idx)=> d.onclick = ()=> go(idx));
+    });
+  }
+
+  // 초기 렌더
+  render();
+</script>
+</body>
+</html>
