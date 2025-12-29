@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Patents</title>
+<style>
+  :root{
+    --text:#111; --muted:#666; --border:#e3e3e3; --brand:#006c4f;
+  }
+  html,body{margin:0;padding:0;color:var(--text);font-family:system-ui, Arial, "Noto Sans KR";}
+  .wrap{max-width:980px;margin:0 auto;padding:20px;}
+
+  /* 특허 한 항목 (텍스트만) */
+  .item{padding:18px 0;border-bottom:1px solid var(--border);}
+  .title{margin:0 0 6px;font-size:22px;font-weight:800;line-height:1.35;}
+  .meta{color:var(--muted);font-size:14px;line-height:1.6;}
+  .desc{color:#333;font-size:15px;margin-top:8px;line-height:1.55;}
+
+  /* 페이지네이션 (‹, ›, 현재 페이지 배지) - 논문 페이지와 톤 통일 */
+  .pager{display:flex;justify-content:center;gap:10px;margin:18px 0 0;}
+  .pager button{
+    border:1px solid var(--border);
+    background:#fff; color:#222;
+    padding:6px 12px; border-radius:8px; cursor:pointer; font-size:16px; font-weight:700;
+  }
+  .pager .badge{
+    background:var(--brand); color:#fff; border-radius:6px; padding:6px 12px; font-weight:700;
+    min-width:28px; text-align:center;
+  }
+  .pager button:disabled{opacity:.45;cursor:not-allowed;}
+  .empty{color:#777;text-align:center;padding:28px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="list">Loading…</div>
+  <div id="pager" class="pager"></div>
+</div>
+
+<script>
+const ALL = JSON.parse('<?= itemsJson ?>') || [];
+const PAGE_SIZE = 5; // 한 화면에 3~5개 권장 → 필요하면 조절
+
+let page = 1;
+
+function esc(s){return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+function render(){
+  const list = document.getElementById('list');
+  if (!ALL.length){ list.innerHTML = `<div class="empty">No patents yet.</div>`; document.getElementById('pager').innerHTML=''; return; }
+
+  const start = (page-1)*PAGE_SIZE;
+  const rows  = ALL.slice(start, start+PAGE_SIZE);
+
+  list.innerHTML = rows.map(p => `
+    <div class="item">
+      <h3 class="title">${esc(p.title)}</h3>
+      <div class="meta">
+        ${esc(p.inventors||'-')}  |  ${esc(String(p.year||'-'))}  |  ${esc(p.number||'-')}
+      </div>
+      ${p.description ? `<div class="desc">${esc(p.description)}</div>` : ``}
+    </div>
+  `).join('');
+
+  renderPager();
+}
+
+function renderPager(){
+  const totalPages = Math.max(1, Math.ceil(ALL.length / PAGE_SIZE));
+  const wrap = document.getElementById('pager');
+  wrap.innerHTML = '';
+
+  const prev = document.createElement('button');
+  prev.textContent = '‹';
+  prev.disabled = (page===1);
+  prev.onclick = ()=>{ page=Math.max(1, page-1); render(); window.scrollTo({top:0, behavior:'smooth'}); };
+
+  const badge = document.createElement('span');
+  badge.textContent = page;
+  badge.className = 'badge';
+
+  const next = document.createElement('button');
+  next.textContent = '›';
+  next.disabled = (page===totalPages);
+  next.onclick = ()=>{ page=Math.min(totalPages, page+1); render(); window.scrollTo({top:0, behavior:'smooth'}); };
+
+  wrap.append(prev, badge, next);
+}
+
+render();
+</script>
+</body>
+</html>
